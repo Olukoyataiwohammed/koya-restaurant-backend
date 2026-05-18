@@ -10,9 +10,8 @@ import hashlib
 import hmac
 import json
 
-from cart.models import Cart
 from .models import Order, OrderItem, Payment
-from .serializer import OrderSerializer, CreateOrderSerializer, PaymentSerializer
+from .serializer import OrderSerializer, CreateOrderSerializer
 
 
 # -----------------------------------------
@@ -43,7 +42,7 @@ def list_orders(request):
 
 
 # -----------------------------------------
-# ORDER DETAIL (SECURED)
+# ORDER DETAIL
 # -----------------------------------------
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -58,7 +57,17 @@ def order_detail(request, pk):
 
 
 # -----------------------------------------
-# CREATE PAYMENT (GENERATE REFERENCE)
+# HELPER: CALCULATE ORDER TOTAL
+# -----------------------------------------
+def calculate_order_total(order):
+    total = 0
+    for item in order.items.all():
+        total += item.item.price * item.quantity
+    return total
+
+
+# -----------------------------------------
+# CREATE PAYMENT
 # -----------------------------------------
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -70,16 +79,19 @@ def create_payment(request):
     except Order.DoesNotExist:
         return Response({"error": "Order not found"}, status=404)
 
-    # Prevent duplicate payments
+    # Prevent duplicate payment
     if Payment.objects.filter(order=order).exists():
         return Response({"error": "Payment already exists"}, status=400)
 
-    # ✅ Generate unique reference
+    # ✅ Calculate total from items
+    amount = calculate_order_total(order)
+
+    # Generate unique reference
     reference = str(uuid.uuid4())
 
     payment = Payment.objects.create(
         order=order,
-        amount=order.total_price,
+        amount=amount,
         method=data.get('method', 'CARD'),
         transaction_id=reference,
         status='PENDING'
@@ -94,7 +106,7 @@ def create_payment(request):
 
 
 # -----------------------------------------
-# OPTIONAL: VERIFY PAYMENT (Frontend Trigger)
+# VERIFY PAYMENT (Frontend)
 # -----------------------------------------
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -127,22 +139,25 @@ def verify_payment(request):
 
     order = payment.order
 
-    # Validate amount
+    # ✅ Validate amount
     amount = payment_data.get("amount") / 100
-    if float(amount) != float(order.total_price):
+    actual_total = calculate_order_total(order)
+
+    if float(amount) != float(actual_total):
         return Response({"error": "Amount mismatch"}, status=400)
 
     payment.status = "COMPLETED"
     payment.save()
 
-    order.is_paid = True
+    # ✅ Update order status instead of is_paid
+    order.status = "COMPLETED"
     order.save()
 
     return Response({"message": "Payment verified"})
 
 
 # -----------------------------------------
-# PAYSTACK WEBHOOK (SECURE)
+# PAYSTACK WEBHOOK
 # -----------------------------------------
 @api_view(['POST'])
 @permission_classes([AllowAny])
@@ -150,7 +165,6 @@ def payment_webhook(request):
     payload = request.body
     signature = request.headers.get('x-paystack-signature')
 
-    # ✅ Verify Paystack signature
     computed_signature = hmac.new(
         settings.PAYSTACK_SECRET_KEY.encode('utf-8'),
         payload,
@@ -162,7 +176,6 @@ def payment_webhook(request):
 
     data = json.loads(payload)
 
-    # Only handle successful payments
     if data.get("event") != "charge.success":
         return Response({"message": "Ignored"}, status=200)
 
@@ -176,17 +189,16 @@ def payment_webhook(request):
         return Response({"error": "Payment not found"}, status=404)
 
     order = payment.order
+    actual_total = calculate_order_total(order)
 
-    # Validate amount
-    if float(amount) != float(order.total_price):
+    if float(amount) != float(actual_total):
         return Response({"error": "Amount mismatch"}, status=400)
 
-    # Update payment
     payment.status = "COMPLETED"
     payment.save()
 
-    # Mark order as paid
-    order.is_paid = True
+    # ✅ Update order status
+    order.status = "COMPLETED"
     order.save()
 
     return Response({"message": "Webhook processed"})

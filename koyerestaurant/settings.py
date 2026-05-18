@@ -36,7 +36,11 @@ SECRET_KEY = 'django-insecure-dm4)1%_v@rn^zc_nu=#a*9wvtfmdf-rm1gfi0qs$l@_y01obq^
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
+ALLOWED_HOSTS = [
+    "localhost",
+    "127.0.0.1",
+    "olukoya1234.pythonanywhere.com"
+]
 
 SIMPLE_JWT ={
     "ACCESS_TOKEN_LIFETIME":timedelta(minutes=15),
@@ -62,6 +66,7 @@ INSTALLED_APPS = [
     "accounts",
     "deals",
     "wishList",
+    "reservation",
 
     # register third  party dependencies
     "rest_framework",
