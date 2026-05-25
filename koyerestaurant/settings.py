@@ -13,7 +13,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 from pathlib import Path
 from datetime import timedelta
 import os
-
+from corsheaders.defaults import default_headers
 from dotenv import load_dotenv
 
 # Load .env file
@@ -105,7 +105,12 @@ MIDDLEWARE = [
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "https://koya-restaurant.vercel.app",
 
+]
+
+CSRF_TRUSTED_ORIGINS = [
+    "https://koya-restaurant.vercel.app",
 ]
 
 
@@ -121,10 +126,12 @@ SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SAMESITE = 'None'
 CSRF_COOKIE_SECURE = True
 
-CORS_ALLOW_HEADERS = ['Content-Type', 'Authorization']
+
 CORS_EXPOSE_HEADERS = ['Content-Type', 'X-CSRFToken']
 
-
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    "Authorization",
+]
 ROOT_URLCONF = 'koyerestaurant.urls'
 
 TEMPLATES = [
